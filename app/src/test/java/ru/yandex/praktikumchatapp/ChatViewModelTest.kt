@@ -1,10 +1,14 @@
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import org.hamcrest.CoreMatchers.equalTo
+import org.hamcrest.MatcherAssert.assertThat
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -32,12 +36,28 @@ class ChatViewModelTest {
     @Test
     fun `send message should update messages with MyMessage`() = runTest {
         val message = Message.MyMessage("TestMessage")
-
+        runTest(testDispatcher) {
+            viewModel.sendMyMessage(message.text)
+            advanceUntilIdle()
+            assertThat(message, equalTo(viewModel.messages.value.first()))
+        }
     }
 
     @Test
     fun testReceiveMessage_concurrentMessages() = runTest {
         val messagesToSend = (1..100).map { Message.MyMessage("Message $it") }
+        val messagesToSendSize = messagesToSend.size
 
+        runTest(testDispatcher) {
+            messagesToSend.forEach { message ->
+                launch {
+                    viewModel.sendMyMessage(message.text)
+                }
+            }
+            advanceUntilIdle()
+            val viewModelMessages = viewModel.messages.value as List<Message.MyMessage>
+            assertThat(messagesToSendSize, equalTo(viewModelMessages.size))
+            assertThat(messagesToSend.sortedBy { it.text }, equalTo(viewModelMessages.sortedBy { it.text }))
+        }
     }
 }
